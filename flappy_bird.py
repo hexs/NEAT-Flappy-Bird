@@ -12,7 +12,7 @@ STAT_FONT = pygame.font.SysFont("comicsans", 50)
 END_FONT = pygame.font.SysFont("comicsans", 70)
 DRAW_LINES = False
 
-WIN = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+display = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
 pygame.display.set_caption("Flappy Bird")
 
 pipe_img = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs", "pipe.png")).convert_alpha())
@@ -67,7 +67,7 @@ class Bird:
             if self.tilt > -90:
                 self.tilt -= self.ROT_VEL
 
-    def draw(self, win):
+    def draw(self, display):
         self.img_count += 1
 
         # For animation of bird, loop through three images
@@ -89,7 +89,7 @@ class Bird:
             self.img_count = self.ANIMATION_TIME * 2
 
         # tilt the bird
-        blitRotateCenter(win, self.img, (self.x, self.y), self.tilt)
+        blitRotateCenter(display, self.img, (self.x, self.y), self.tilt)
 
     def get_mask(self):
         return pygame.mask.from_surface(self.img)
@@ -122,12 +122,12 @@ class Pipe():
     def move(self):
         self.x -= self.VEL
 
-    def draw(self, win):
-        win.blit(self.PIPE_TOP, (self.x, self.top))
-        win.blit(self.PIPE_BOTTOM, (self.x, self.bottom))
+    def draw(self, display):
+        display.blit(self.PIPE_TOP, (self.x, self.top))
+        display.blit(self.PIPE_BOTTOM, (self.x, self.bottom))
 
 
-    def collide(self, bird, win):
+    def collide(self, bird):
         bird_mask = bird.get_mask()
         top_mask = pygame.mask.from_surface(self.PIPE_TOP)
         bottom_mask = pygame.mask.from_surface(self.PIPE_BOTTOM)
@@ -162,9 +162,9 @@ class Base:
         if self.x2 + self.WIDTH < 0:
             self.x2 = self.x1 + self.WIDTH
 
-    def draw(self, win):
-        win.blit(self.IMG, (self.x1, self.y))
-        win.blit(self.IMG, (self.x2, self.y))
+    def draw(self, display):
+        display.blit(self.IMG, (self.x1, self.y))
+        display.blit(self.IMG, (self.x2, self.y))
 
 
 def blitRotateCenter(surf, image, topleft, angle):
@@ -174,50 +174,49 @@ def blitRotateCenter(surf, image, topleft, angle):
     surf.blit(rotated_image, new_rect.topleft)
 
 
-def draw_window(win, birds, pipes, base, score, gen, pipe_ind):
+def draw_window(display, birds, pipes, base, score, gen, pipe_ind):
     if gen == 0:
         gen = 1
-    win.blit(bg_img, (0, 0))
+    display.blit(bg_img, (0, 0))
 
     for pipe in pipes:
-        pipe.draw(win)
+        pipe.draw(display)
 
-    base.draw(win)
+    base.draw(display)
     for bird in birds:
         # draw lines from bird to pipe
         if DRAW_LINES:
             try:
-                pygame.draw.line(win, (255, 0, 0),
+                pygame.draw.line(display, (255, 0, 0),
                                  (bird.x + bird.img.get_width() / 2, bird.y + bird.img.get_height() / 2),
                                  (pipes[pipe_ind].x + pipes[pipe_ind].PIPE_TOP.get_width() / 2, pipes[pipe_ind].height),
                                  5)
-                pygame.draw.line(win, (255, 0, 0),
+                pygame.draw.line(display, (255, 0, 0),
                                  (bird.x + bird.img.get_width() / 2, bird.y + bird.img.get_height() / 2), (
                                      pipes[pipe_ind].x + pipes[pipe_ind].PIPE_BOTTOM.get_width() / 2,
                                      pipes[pipe_ind].bottom), 5)
             except:
                 pass
         # draw bird
-        bird.draw(win)
+        bird.draw(display)
 
     # score
     score_label = STAT_FONT.render("Score: " + str(score), 1, (255, 255, 255))
-    win.blit(score_label, (WIN_WIDTH - score_label.get_width() - 15, 10))
+    display.blit(score_label, (WIN_WIDTH - score_label.get_width() - 15, 10))
 
     # generations
     score_label = STAT_FONT.render("Gens: " + str(gen - 1), 1, (255, 255, 255))
-    win.blit(score_label, (10, 10))
+    display.blit(score_label, (10, 10))
 
     # alive
     score_label = STAT_FONT.render("Alive: " + str(len(birds)), 1, (255, 255, 255))
-    win.blit(score_label, (10, 50))
+    display.blit(score_label, (10, 50))
 
     pygame.display.update()
 
 
 def eval_genomes(genomes, config):
-    global WIN, gen
-    win = WIN
+    global display, gen
     gen += 1
 
     nets = []
@@ -273,7 +272,7 @@ def eval_genomes(genomes, config):
             pipe.move()
             # check for collision
             for bird in birds:
-                if pipe.collide(bird, win):
+                if pipe.collide(bird):
                     ge[birds.index(bird)].fitness -= 1
                     nets.pop(birds.index(bird))
                     ge.pop(birds.index(bird))
@@ -302,7 +301,7 @@ def eval_genomes(genomes, config):
                 ge.pop(birds.index(bird))
                 birds.pop(birds.index(bird))
 
-        draw_window(WIN, birds, pipes, base, score, gen, pipe_ind)
+        draw_window(display, birds, pipes, base, score, gen, pipe_ind)
 
         # break if score gets large enough
         '''if score > 20:
