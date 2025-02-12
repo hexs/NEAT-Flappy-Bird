@@ -8,7 +8,7 @@ pygame.font.init()
 
 WIN_WIDTH = 600
 WIN_HEIGHT = 800
-FLOOR = 730
+
 STAT_FONT = pygame.font.SysFont("comicsans", 50)
 END_FONT = pygame.font.SysFont("comicsans", 70)
 DRAW_LINES = False
@@ -19,7 +19,6 @@ pygame.display.set_caption("Flappy Bird")
 BG_COLOR = (135, 206, 250)
 BIRD_COLOR = (255, 0, 0)
 PIPE_COLOR = (0, 255, 0)
-BASE_COLOR = (139, 69, 19)
 
 BIRD_WIDTH = 30
 BIRD_HEIGHT = 30
@@ -63,51 +62,29 @@ class Pipe:
 
     def __init__(self, x):
         self.x = x
-        self.height = 0
-        self.passed = False
-        self.set_height()
-
-    def set_height(self):
         self.height = random.randrange(50, 450)
+        self.passed = False
 
     def move(self):
         self.x -= self.VEL
 
     def draw(self, display):
         top_rect = pygame.Rect(self.x, 0, PIPE_WIDTH, self.height)
-        bottom_rect = pygame.Rect(self.x, self.height + self.GAP, PIPE_WIDTH, FLOOR - (self.height + self.GAP))
+        bottom_rect = pygame.Rect(self.x, self.height + self.GAP, PIPE_WIDTH, WIN_HEIGHT - (self.height + self.GAP))
         pygame.draw.rect(display, PIPE_COLOR, top_rect)
         pygame.draw.rect(display, PIPE_COLOR, bottom_rect)
 
     def collide(self, bird):
         bird_rect = bird.get_rect()
         top_rect = pygame.Rect(self.x, 0, PIPE_WIDTH, self.height)
-        bottom_rect = pygame.Rect(self.x, self.height + self.GAP, PIPE_WIDTH, FLOOR - (self.height + self.GAP))
+        bottom_rect = pygame.Rect(self.x, self.height + self.GAP, PIPE_WIDTH, WIN_HEIGHT - (self.height + self.GAP))
         return bird_rect.colliderect(top_rect) or bird_rect.colliderect(bottom_rect)
 
 
-class Base:
-    VEL = 5
-
-    def __init__(self, y):
-        self.y = y
-        self.x = 0
-
-    def move(self):
-        self.x -= self.VEL
-        if self.x <= -WIN_WIDTH:
-            self.x = 0
-
-    def draw(self, display):
-        pygame.draw.rect(display, BASE_COLOR, (self.x, self.y, WIN_WIDTH, WIN_HEIGHT - self.y))
-        pygame.draw.rect(display, BASE_COLOR, (self.x + WIN_WIDTH, self.y, WIN_WIDTH, WIN_HEIGHT - self.y))
-
-
-def draw_window(display, birds, pipes, base, score, gen, pipe_ind):
+def draw_window(display, birds, pipes, score, gen, pipe_ind):
     display.fill(BG_COLOR)
     for pipe in pipes:
         pipe.draw(display)
-    base.draw(display)
     for bird in birds:
         if DRAW_LINES:
             try:
@@ -124,7 +101,7 @@ def draw_window(display, birds, pipes, base, score, gen, pipe_ind):
         bird.draw(display)
     score_label = STAT_FONT.render("Score: " + str(score), 1, (255, 255, 255))
     display.blit(score_label, (WIN_WIDTH - score_label.get_width() - 15, 10))
-    gens_label = STAT_FONT.render("Gens: " + str(gen - 1), 1, (255, 255, 255))
+    gens_label = STAT_FONT.render("Gens: " + str(gen), 1, (255, 255, 255))
     display.blit(gens_label, (10, 10))
     alive_label = STAT_FONT.render("Alive: " + str(len(birds)), 1, (255, 255, 255))
     display.blit(alive_label, (10, 50))
@@ -143,31 +120,35 @@ def eval_genomes(genomes, config):
         nets.append(net)
         birds.append(Bird(230, 350))
         ge.append(genome)
-    base = Base(FLOOR)
+
     pipes = [Pipe(700)]
     score = 0
     clock = pygame.time.Clock()
-    run = True
-    while run and len(birds) > 0:
+    play = True
+    while play and len(birds) > 0:
         clock.tick(30)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                run = False
-                pygame.quit()
-                quit()
-                break
+                play = False
         pipe_ind = 0
         if len(birds) > 0 and len(pipes) > 1 and birds[0].x > pipes[0].x + PIPE_WIDTH:
             pipe_ind = 1
         for i, bird in enumerate(birds):
             ge[i].fitness += 0.1
             bird.move()
-            output = nets[birds.index(bird)].activate(
-                (bird.y, abs(bird.y - pipes[pipe_ind].height), abs(bird.y - (pipes[pipe_ind].height + Pipe.GAP)))
-            )
+            output = nets[birds.index(bird)].activate((
+                bird.y,
+                pipes[pipe_ind].height,
+                pipes[pipe_ind].height + Pipe.GAP
+            ))
+
+            # bird.y,
+            # abs(bird.y - pipes[pipe_ind].height),
+            # abs(bird.y - (pipes[pipe_ind].height + Pipe.GAP))
+
             if output[0] > 0.5:
                 bird.jump()
-        base.move()
+
         rem = []
         add_pipe = False
         for pipe in pipes:
@@ -191,12 +172,12 @@ def eval_genomes(genomes, config):
         for r in rem:
             pipes.remove(r)
         for bird in birds:
-            if bird.y + BIRD_HEIGHT >= FLOOR or bird.y < 0:
+            if bird.y < 0 or WIN_HEIGHT < bird.y + BIRD_HEIGHT:
                 nets.pop(birds.index(bird))
                 ge.pop(birds.index(bird))
                 birds.pop(birds.index(bird))
-        draw_window(display, birds, pipes, base, score, gen, pipe_ind)
-        if score > 20:
+        draw_window(display, birds, pipes, score, gen, pipe_ind)
+        if score > 10:
             pickle.dump(nets[0], open("best.pickle", "wb"))
             break
 
@@ -213,7 +194,54 @@ def run(config_file):
     print('\nBest genome:\n{!s}'.format(winner))
 
 
+def run_best():
+    with open("best.pickle", "rb") as f:
+        net = pickle.load(f)
+    bird = Bird(230, 350)
+
+    pipes = [Pipe(700)]
+    score = 0
+    clock = pygame.time.Clock()
+    play = True
+    while play:
+        clock.tick(30)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                play = False
+
+        pipe_ind = 0
+        if len(pipes) > 1 and bird.x > pipes[0].x + PIPE_WIDTH:
+            pipe_ind = 1
+        bird.move()
+        output = net.activate((
+            bird.y,
+            pipes[pipe_ind].height,
+            pipes[pipe_ind].height + Pipe.GAP
+        ))
+
+        if output[0] > 0.5:
+            bird.jump()
+
+        for pipe in pipes:
+            pipe.move()
+            if pipe.collide(bird):
+                play = False
+            if pipe.x + PIPE_WIDTH < 0:
+                pipes.remove(pipe)
+            if not pipe.passed and pipe.x < bird.x:
+                pipe.passed = True
+                score += 1
+                pipes.append(Pipe(WIN_WIDTH))
+
+        if bird.y < 0 or WIN_HEIGHT < bird.y + BIRD_HEIGHT:
+            play = False
+        draw_window(display, [bird], pipes, score, -1, pipe_ind)
+    pygame.quit()
+
+
 if __name__ == '__main__':
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, 'config-feedforward.txt')
+
     run(config_path)
+    run_best()
