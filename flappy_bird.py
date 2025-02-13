@@ -3,6 +3,7 @@ import random
 import os
 import neat
 import pickle
+from hexss.constants.terminal_color import *
 
 pygame.font.init()
 
@@ -11,13 +12,11 @@ WIN_HEIGHT = 800
 
 STAT_FONT = pygame.font.SysFont("comicsans", 50)
 END_FONT = pygame.font.SysFont("comicsans", 70)
-DRAW_LINES = False
 
 display = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
 pygame.display.set_caption("Flappy Bird")
 
 BG_COLOR = (135, 206, 250)
-BIRD_COLOR = (255, 0, 0)
 PIPE_COLOR = (0, 255, 0)
 
 BIRD_WIDTH = 30
@@ -28,12 +27,13 @@ gen = 0
 
 
 class Bird:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
+    def __init__(self, color=(255, 0, 0)):
+        self.x = 230
+        self.y = 350
         self.tick_count = 0
         self.vel = 0
         self.height = self.y
+        self.color = color
 
     def jump(self):
         self.vel = -10.5
@@ -42,15 +42,15 @@ class Bird:
 
     def move(self):
         self.tick_count += 1
-        displacement = self.vel * self.tick_count + 0.5 * 3 * self.tick_count ** 2
-        if displacement >= 16:
-            displacement = 16
-        if displacement < 0:
-            displacement -= 2
-        self.y += displacement
+        d = self.vel * self.tick_count + 0.5 * 3 * self.tick_count ** 2
+        if d >= 16:
+            d = 16
+        if d < 0:
+            d -= 2
+        self.y += d
 
     def draw(self, display):
-        pygame.draw.rect(display, BIRD_COLOR, (self.x, self.y, BIRD_WIDTH, BIRD_HEIGHT))
+        pygame.draw.rect(display, self.color, (self.x, self.y, BIRD_WIDTH, BIRD_HEIGHT))
 
     def get_rect(self):
         return pygame.Rect(self.x, self.y, BIRD_WIDTH, BIRD_HEIGHT)
@@ -58,7 +58,7 @@ class Bird:
 
 class Pipe:
     GAP = 200
-    VEL = 5
+    VEL = 10
 
     def __init__(self, x):
         self.x = x
@@ -86,18 +86,6 @@ def draw_window(display, birds, pipes, score, gen, pipe_ind):
     for pipe in pipes:
         pipe.draw(display)
     for bird in birds:
-        if DRAW_LINES:
-            try:
-                pygame.draw.line(display, (255, 0, 0),
-                                 (bird.x + BIRD_WIDTH / 2, bird.y + BIRD_HEIGHT / 2),
-                                 (pipes[pipe_ind].x + PIPE_WIDTH / 2, pipes[pipe_ind].height),
-                                 5)
-                pygame.draw.line(display, (255, 0, 0),
-                                 (bird.x + BIRD_WIDTH / 2, bird.y + BIRD_HEIGHT / 2),
-                                 (pipes[pipe_ind].x + PIPE_WIDTH / 2, pipes[pipe_ind].height + Pipe.GAP),
-                                 5)
-            except:
-                pass
         bird.draw(display)
     score_label = STAT_FONT.render("Score: " + str(score), 1, (255, 255, 255))
     display.blit(score_label, (WIN_WIDTH - score_label.get_width() - 15, 10))
@@ -108,8 +96,12 @@ def draw_window(display, birds, pipes, score, gen, pipe_ind):
     pygame.display.update()
 
 
+id_list = []
+
+
 def eval_genomes(genomes, config):
-    global display, gen
+    print('------------ eval_genomes ------------')
+    global display, gen, id_list
     gen += 1
     nets = []
     birds = []
@@ -118,7 +110,22 @@ def eval_genomes(genomes, config):
         genome.fitness = 0
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         nets.append(net)
-        birds.append(Bird(230, 350))
+        count = id_list.count(genome_id)
+        if count == 0:
+            birds.append(Bird())
+        elif count == 1:
+            birds.append(Bird((0, 0, 255)))
+        elif count == 2:
+            birds.append(Bird((0, 50, 255)))
+        elif count == 3:
+            birds.append(Bird((0, 100, 255)))
+        elif count == 4:
+            birds.append(Bird((0, 150, 255)))
+        elif count == 5:
+            birds.append(Bird((0, 200, 255)))
+        else:
+            birds.append(Bird((0, 255, 255)))
+        id_list.append(genome_id)
         ge.append(genome)
 
     pipes = [Pipe(700)]
@@ -177,8 +184,9 @@ def eval_genomes(genomes, config):
                 ge.pop(birds.index(bird))
                 birds.pop(birds.index(bird))
         draw_window(display, birds, pipes, score, gen, pipe_ind)
-        if score > 10:
+        if score > 20:
             pickle.dump(nets[0], open("best.pickle", "wb"))
+            print(f'{GREEN}save best.pickle{END}')
             break
 
 
@@ -197,7 +205,7 @@ def run(config_file):
 def run_best():
     with open("best.pickle", "rb") as f:
         net = pickle.load(f)
-    bird = Bird(230, 350)
+    bird = Bird()
 
     pipes = [Pipe(700)]
     score = 0
